@@ -91,7 +91,7 @@ class _ImageGridState extends State<ImageGrid> {
             ),
             if (selectedIndex != null)
               Positioned.fill(
-                child: GestureDetector(
+                child: InkWell(
                   onTap: () {
                     setState(() {
                       selectedIndex = null;
