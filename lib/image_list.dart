@@ -30,6 +30,13 @@ class _ImageGridState extends State<ImageGrid> {
     });
   }
 
+    @override
+  void dispose() {
+  _scrollController.dispose();
+  super.dispose();
+  }
+
+
   @override
   Widget build(BuildContext context) {
     var imageViewModel = ImageListViewModel.watch(context);
@@ -66,11 +73,10 @@ class _ImageGridState extends State<ImageGrid> {
                     });
                   },
                   onTap: () {
-                    if (selectedIndex != null) {
-                      setState(() {
-                        selectedIndex = null;
-                      });
-                    }
+                    setState(() {
+                      selectedIndex = index;
+                      debugPrint("${imageViewModelRead.imageListData[selectedIndex!]}");
+                    });
                   },
                   child: Stack(
                     children: [
