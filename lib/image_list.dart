@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:provider_app/image_card.dart';
@@ -11,9 +10,14 @@ class ImageGrid extends StatefulWidget {
   State<ImageGrid> createState() => _ImageGridState();
 }
 
-class _ImageGridState extends State<ImageGrid> {
+class _ImageGridState extends State<ImageGrid> with SingleTickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
   int? selectedIndex;
+  GlobalKey? _selectedImageKey;
+  Rect? _selectedImageRect;
+  late AnimationController _animationController;
+  late Animation<double> _blurAnimation;
+  late Animation<double> _opacityAnimation;
 
   @override
   void initState() {
@@ -23,19 +27,52 @@ class _ImageGridState extends State<ImageGrid> {
       await imageListViewModel.getImageListData();
     });
     _scrollController.addListener(() {
-      if (_scrollController.offset ==
-          _scrollController.position.maxScrollExtent) {
+      if (_scrollController.offset == _scrollController.position.maxScrollExtent) {
         imageListViewModel.getMoreImageListData();
+      }
+    });
+
+    // Initialize Animation Controller
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    );
+
+    _blurAnimation = Tween<double>(begin: 0.0, end: 10.0).animate(_animationController);
+    _opacityAnimation = Tween<double>(begin: 0.0, end: 0.1).animate(_animationController);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _updateSelectedImageRect() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_selectedImageKey != null &&
+          _selectedImageKey!.currentContext != null) {
+        final RenderBox renderBox =
+            _selectedImageKey!.currentContext!.findRenderObject() as RenderBox;
+        final offset = renderBox.localToGlobal(Offset.zero);
+        final size = renderBox.size;
+        setState(() {
+          _selectedImageRect = Rect.fromLTWH(
+              offset.dx, offset.dy - 115.0, size.width, size.height);
+        });
       }
     });
   }
 
-    @override
-  void dispose() {
-  _scrollController.dispose();
-  super.dispose();
+  Future<void> _handleSelectionChange() async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    _updateSelectedImageRect();
   }
 
+  Future<void> _handleBlurAnimation() async {
+    _animationController.forward();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,99 +80,135 @@ class _ImageGridState extends State<ImageGrid> {
     var imageViewModelRead = ImageListViewModel.read(context);
 
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.black,
         elevation: .3,
-        title: const Text(
-          'Saved Photos',
-          style: TextStyle(fontWeight: FontWeight.w500),
+        title: const Row(
+          children: [
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Saved Photos',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w900, color: Colors.white),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(5.0),
-        child: Stack(
-          alignment: AlignmentDirectional.bottomCenter,
-          children: [
-            GridView.builder(
+      body: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(10.0),
+            child: GridView.builder(
               controller: _scrollController,
               itemCount: imageViewModel.imageListData.length,
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                crossAxisSpacing: 5.0,
-                mainAxisSpacing: 5.0,
+                crossAxisSpacing: 15.0,
+                mainAxisSpacing: 15.0,
               ),
               itemBuilder: (context, index) {
-                return InkWell(
-                  onLongPress: () {
+                bool isSelected = selectedIndex == index;
+                double scale = isSelected ? 1.2 : 1.0;
+
+                return GestureDetector(
+                  onTapDown: (details) {
                     setState(() {
                       selectedIndex = index;
-                      debugPrint("${imageViewModelRead.imageListData[selectedIndex!]}");
+                      _selectedImageKey = GlobalKey();
+                      _handleBlurAnimation();
+                      _handleSelectionChange();
                     });
                   },
-                  onTap: () {
+                  onTapUp: (details) {
                     setState(() {
-                      selectedIndex = index;
-                      debugPrint("${imageViewModelRead.imageListData[selectedIndex!]}");
+                      selectedIndex = null;
+                      _selectedImageKey = null;
+                      _selectedImageRect = null;
+                      _animationController.reverse();
                     });
                   },
                   child: Stack(
                     children: [
-                      ImageCard(
-                        imageData: imageViewModel.imageListData[index],
-                      ),
-                      if (selectedIndex != null && selectedIndex != index)
-                        BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                          child: Container(
-                            color: Colors.black.withOpacity(0.1),
+                       if (selectedIndex != null)
+                        AnimatedBuilder(
+                          animation: _animationController,
+                          builder: (context, child) {
+                            return BackdropFilter(
+                              filter: ImageFilter.blur(
+                                  sigmaX: _blurAnimation.value,
+                                  sigmaY: _blurAnimation.value),
+                              child: Container(
+                                color: Colors.black.withOpacity(_opacityAnimation.value),
+                              ),
+                            );
+                          },
+                        ),
+                      AnimatedScale(
+                        scale: scale,
+                        duration: const Duration(milliseconds: 300),
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              if (selectedIndex == index) {
+                                selectedIndex = null;
+                                _selectedImageKey = null;
+                                _selectedImageRect = null;
+                                _animationController.reverse();
+                              } else {
+                                selectedIndex = index;
+                                _selectedImageKey = GlobalKey();
+                                _handleBlurAnimation();
+                                _handleSelectionChange();
+                              }
+                            });
+                          },
+                          child: ImageCard(
+                            imageData: imageViewModel.imageListData[index],
+                            isSelected: isSelected,
+                            key: isSelected ? _selectedImageKey : null,
                           ),
                         ),
+                      ),
                     ],
                   ),
                 );
               },
             ),
-            if (selectedIndex != null)
-              Positioned.fill(
-                child: InkWell(
-                  onTap: () {
-                    setState(() {
-                      selectedIndex = null;
-                    });
-                  },
-                  child: Container(
-                    color: Colors.black.withOpacity(0.6),
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        color: Colors.white,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Image.network(
-                            //   "${imageViewModelRead.imageListData[selectedIndex!]}",
-                            //   fit: BoxFit.cover,
-                            // ),
-                            CachedNetworkImage(
-                              imageUrl:
-                                  "${imageViewModelRead.imageListData[selectedIndex!].url}",
-                              fit: BoxFit.cover,
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+          ),
+          if (_selectedImageRect != null)
+            Positioned(
+              left: _selectedImageRect!.left,
+              top: _selectedImageRect!.top,
+              width: _selectedImageRect!.width * 1.2,
+              height: _selectedImageRect!.height * 1.2,
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    selectedIndex = null;
+                    _selectedImageKey = null;
+                    _selectedImageRect = null;
+                    _animationController.reverse();
+                  });
+                },
+                child: ImageCard(
+                  imageData: imageViewModelRead.imageListData[selectedIndex!],
+                  isSelected: true,
                 ),
               ),
-            if (imageViewModel.isMoreLoading)
-              const Padding(
-                padding: EdgeInsets.all(8.0),
+            ),
+          if (imageViewModel.isMoreLoading)
+            const Positioned.fill(
+              child: Align(
+                alignment: Alignment.bottomCenter,
                 child: CircularProgressIndicator(),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }

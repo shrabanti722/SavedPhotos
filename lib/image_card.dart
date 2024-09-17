@@ -4,7 +4,8 @@ import 'package:provider_app/image_list_model.dart';
 
 class ImageCard extends StatelessWidget {
   final ImageListModel? imageData;
-  const ImageCard({super.key, this.imageData});
+  final bool isSelected;
+  const ImageCard({super.key, this.imageData, required this.isSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -12,8 +13,8 @@ class ImageCard extends StatelessWidget {
       alignment: AlignmentDirectional.bottomStart,
       children: [
         SizedBox(
-          height: MediaQuery.of(context).size.width * .47,
-          width: MediaQuery.of(context).size.width * .47,
+          height: isSelected ?  MediaQuery.of(context).size.width * .70 : MediaQuery.of(context).size.width * .47 ,
+          width: isSelected ?  MediaQuery.of(context).size.width * .70 : MediaQuery.of(context).size.width * .47,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: CachedNetworkImage(
