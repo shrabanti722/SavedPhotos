@@ -35,7 +35,7 @@ class _ImageGridState extends State<ImageGrid> with SingleTickerProviderStateMix
     // Initialize Animation Controller
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: const Duration(milliseconds: 500),
     );
 
     _blurAnimation = Tween<double>(begin: 0.0, end: 10.0).animate(_animationController);
