@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider_app/image_card.dart';
-import 'package:provider_app/image_list_view_model.dart';
+import 'package:provider_app/image_list_controller.dart';
+import 'package:provider_app/image_list_model.dart';
 
-class ImageGrid extends StatefulWidget {
+class ImageGrid extends ConsumerStatefulWidget {
   const ImageGrid({super.key});
 
   @override
-  State<ImageGrid> createState() => _ImageGridState();
+  ConsumerState<ImageGrid> createState() => _ImageGridState();
 }
 
-class _ImageGridState extends State<ImageGrid> with SingleTickerProviderStateMixin {
+class _ImageGridState extends ConsumerState<ImageGrid>
+    with SingleTickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
   int? selectedIndex;
   GlobalKey? _selectedImageKey;
@@ -22,24 +25,27 @@ class _ImageGridState extends State<ImageGrid> with SingleTickerProviderStateMix
   @override
   void initState() {
     super.initState();
-    var imageListViewModel = ImageListViewModel.read(context);
+    var imageLisControllertNotifier =
+        ref.read(imageListControllerProvider.notifier);
+
     Future.delayed(Duration.zero, () async {
-      await imageListViewModel.getImageListData();
+      imageLisControllertNotifier.getImageListData();
     });
     _scrollController.addListener(() {
-      if (_scrollController.offset == _scrollController.position.maxScrollExtent) {
-        imageListViewModel.getMoreImageListData();
+      if (_scrollController.offset ==
+          _scrollController.position.maxScrollExtent) {
+        imageLisControllertNotifier.getMoreImageListData();
       }
     });
-
-    // Initialize Animation Controller
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
     );
 
-    _blurAnimation = Tween<double>(begin: 0.0, end: 10.0).animate(_animationController);
-    _opacityAnimation = Tween<double>(begin: 0.0, end: 0.1).animate(_animationController);
+    _blurAnimation =
+        Tween<double>(begin: 0.0, end: 10.0).animate(_animationController);
+    _opacityAnimation =
+        Tween<double>(begin: 0.0, end: 0.1).animate(_animationController);
   }
 
   @override
@@ -76,9 +82,8 @@ class _ImageGridState extends State<ImageGrid> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
-    var imageViewModel = ImageListViewModel.watch(context);
-    var imageViewModelRead = ImageListViewModel.read(context);
-
+    final imageListState = ref.watch(imageListControllerProvider);
+    
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -103,81 +108,96 @@ class _ImageGridState extends State<ImageGrid> with SingleTickerProviderStateMix
         children: [
           Padding(
             padding: const EdgeInsets.all(10.0),
-            child: GridView.builder(
-              controller: _scrollController,
-              itemCount: imageViewModel.imageListData.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 15.0,
-                mainAxisSpacing: 15.0,
-              ),
-              itemBuilder: (context, index) {
-                bool isSelected = selectedIndex == index;
-                double scale = isSelected ? 1.2 : 1.0;
-
-                return GestureDetector(
-                  onTapDown: (details) {
-                    setState(() {
-                      selectedIndex = index;
-                      _selectedImageKey = GlobalKey();
-                      _handleBlurAnimation();
-                      _handleSelectionChange();
-                    });
-                  },
-                  onTapUp: (details) {
-                    setState(() {
-                      selectedIndex = null;
-                      _selectedImageKey = null;
-                      _selectedImageRect = null;
-                      _animationController.reverse();
-                    });
-                  },
-                  child: Stack(
-                    children: [
-                       if (selectedIndex != null)
-                        AnimatedBuilder(
-                          animation: _animationController,
-                          builder: (context, child) {
-                            return BackdropFilter(
-                              filter: ImageFilter.blur(
-                                  sigmaX: _blurAnimation.value,
-                                  sigmaY: _blurAnimation.value),
-                              child: Container(
-                                color: Colors.black.withOpacity(_opacityAnimation.value),
-                              ),
-                            );
-                          },
+            child: imageListState.when(
+              data: (imageState) {
+                return Column(
+                  children: [
+                    Expanded(
+                      child: GridView.builder(
+                        controller: _scrollController,
+                        itemCount: imageState.images.length,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 15.0,
+                          mainAxisSpacing: 15.0,
                         ),
-                      AnimatedScale(
-                        scale: scale,
-                        duration: const Duration(milliseconds: 300),
-                        child: InkWell(
-                          onTap: () {
-                            setState(() {
-                              if (selectedIndex == index) {
-                                selectedIndex = null;
-                                _selectedImageKey = null;
-                                _selectedImageRect = null;
-                                _animationController.reverse();
-                              } else {
+                        itemBuilder: (context, index) {
+                          bool isSelected = selectedIndex == index;
+                          double scale = isSelected ? 1.2 : 1.0;
+
+                          return GestureDetector(
+                            onTapDown: (details) {
+                              setState(() {
                                 selectedIndex = index;
                                 _selectedImageKey = GlobalKey();
                                 _handleBlurAnimation();
                                 _handleSelectionChange();
-                              }
-                            });
-                          },
-                          child: ImageCard(
-                            imageData: imageViewModel.imageListData[index],
-                            isSelected: isSelected,
-                            key: isSelected ? _selectedImageKey : null,
-                          ),
-                        ),
+                              });
+                            },
+                            onTapUp: (details) {
+                              setState(() {
+                                selectedIndex = null;
+                                _selectedImageKey = null;
+                                _selectedImageRect = null;
+                                _animationController.reverse();
+                              });
+                            },
+                            child: Stack(
+                              children: [
+                                if (selectedIndex != null)
+                                  AnimatedBuilder(
+                                    animation: _animationController,
+                                    builder: (context, child) {
+                                      return BackdropFilter(
+                                        filter: ImageFilter.blur(
+                                            sigmaX: _blurAnimation.value,
+                                            sigmaY: _blurAnimation.value),
+                                        child: Container(
+                                          color: Colors.black.withOpacity(
+                                              _opacityAnimation.value),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                AnimatedScale(
+                                  scale: scale,
+                                  duration: const Duration(milliseconds: 300),
+                                  child: InkWell(
+                                    onTap: () {
+                                      setState(() {
+                                        if (selectedIndex == index) {
+                                          selectedIndex = null;
+                                          _selectedImageKey = null;
+                                          _selectedImageRect = null;
+                                          _animationController.reverse();
+                                        } else {
+                                          selectedIndex = index;
+                                          _selectedImageKey = GlobalKey();
+                                          _handleBlurAnimation();
+                                          _handleSelectionChange();
+                                        }
+                                      });
+                                    },
+                                    child: ImageCard(
+                                      imageData: imageState.images[index],
+                                      isSelected: isSelected,
+                                      key:
+                                          isSelected ? _selectedImageKey : null,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 );
               },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, stack) => Center(child: Text('Error: $err')),
             ),
           ),
           if (_selectedImageRect != null)
@@ -196,12 +216,15 @@ class _ImageGridState extends State<ImageGrid> with SingleTickerProviderStateMix
                   });
                 },
                 child: ImageCard(
-                  imageData: imageViewModelRead.imageListData[selectedIndex!],
+                  imageData: imageListState.maybeWhen(
+                    data: (imageState) => imageState.images[selectedIndex!],
+                    orElse: () => ImageListModel(),
+                  ),
                   isSelected: true,
                 ),
               ),
             ),
-          if (imageViewModel.isMoreLoading)
+          if (imageListState.maybeWhen(data: (data) => data.isMoreLoading, orElse: () => false))
             const Positioned.fill(
               child: Align(
                 alignment: Alignment.bottomCenter,
